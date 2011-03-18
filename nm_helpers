@@ -1,0 +1,419 @@
+#!/bin/bash
+
+PATH="$PATH":/usr/sbin:/sbin/:/usr/bin:/bin
+LC_ALL=C
+
+LANG_STARTING_SSH_TUNNEL="SSH tunnel started: %s"
+LANG_STOPPED_SSH_TUNNEL="SSH tunnel with %s disconnected: %s"
+LANG_STOPPING_SSH_TUNNELS="SSH tunnels are disconnecting: %s"
+LANG_CONNECTED_TO="Connected with %s"
+LANG_DISCONNECTED_FROM="Disconnected from %s"
+
+
+# logging function: print to STDOUT 
+# call custom function "custom_log" if available (from addons)
+# params:
+#	text to log
+#
+log() {
+	if fn_exists callback_log ; then
+		callback_log $* &
+	else
+		echo $* &
+	fi
+}
+readonly -f log
+
+# get this scripts dir
+# params:
+#	NONE
+#
+get_script_dir() {
+	pushd $(dirname $(readlink -f "$BASH_SOURCE")) > /dev/null
+	local script_path="$PWD"
+	popd > /dev/null
+	echo -n ${script_path}
+}
+readonly -f get_script_dir 
+
+# run scripts from SCRIPT_DIR 
+# params:
+#	NONE
+#
+# you can change SCRIPTS_DIR in your config file 
+load_scripts() {
+	[[  -e ${SCRIPTS_DIR} ]] || return 1
+	for file in ${SCRIPTS_DIR}/* ; do
+		[[ -x "${file}" ]] || continue
+
+		unset -v IF_DEVICE IF_CONNECTION DO_CONNECTION SSH_SERVER
+		unset -f up down pre_up pre_down
+		source "${file}"
+
+		local script_run=0
+		if [[ $script_run -eq 0 ]] && [[ ! -z ${IF_CONNECTION[0]} ]]; then
+			for i in $(seq 0 $((${#IF_CONNECTION[@]} - 1))); do
+				local if_conn=${IF_CONNECTION[$i]}
+			
+				if [[ ${if_conn:0:1} == '~' && ${CONNECTION_NAME} =~ ${if_conn#~*} ]] || 
+					[[ ${if_conn:0:1} != '~' && ${CONNECTION_UUID} == $(connection_uuid ${if_conn}) ]] ; then
+					run_script &
+					script_run=1
+					break
+				fi
+			done
+		fi
+		if [[ $script_run -eq 0 ]] && [[ ! -z ${IF_DEVICE[0]} ]]; then
+			for i in $(seq 0 $((${#IF_DEVICE[@]} -1))); do
+				local if_dev=${IF_DEVICE[$i]}
+		
+				if [[ ${if_dev:0:1} == '~' && ${DEV} =~ ${if_dev#~*} ]] || [[ ${if_dev:0:1} != '~' && ${DEV} == ${if_dev} ]] ; then
+					run_script &
+					script_run=1
+					break
+				fi
+			done
+		fi
+		if [[ $script_run -eq 0 ]] && [[ -z ${IF_CONNECTION[0]} && -z ${IF_DEVICE[0]} ]]; then
+			if [[ `fn_exists up` ]] || [[ `fn_exists down` ]]; then
+				run_script &
+				script_run=1
+				break
+			fi
+		fi
+	done
+}
+readonly -f load_scripts 
+
+# run included script if at least one condition is met
+# params:
+#	NONE
+#
+run_script() {
+	if [[ $ACT == 'up' ]] || [[ $ACT == 'vpn-up' ]]; then
+		if fn_exists pre_up ; then
+			pre_up 
+		fi
+		if [[ ! -z ${DO_CONNECTION[0]} ]]; then
+			local connection=$( get_random DO_CONNECTION[@] )
+			stop_nm_connection ${connection}
+
+			if start_nm_connection ${connection} ; then
+				printf -v msg "${LANG_CONNECTED_TO}" "${connection}"
+				log ${msg}
+			else
+				printf -v msg "${LANG_DISCONNECTED_FROM}" "${connection}" "${NMCLI_ANSWER}"
+				log ${msg}
+			fi
+		fi
+		if [[ ! -z ${SSH_SERVER[0]} ]]; then
+			start_ssh_tunnel SSH_SERVER[@] &
+		fi
+		if fn_exists up ; then
+			up 
+		fi
+	fi
+	if [[ $ACT == 'down' ]] || [[ $ACT == 'vpn-down' ]]; then
+		if fn_exists pre_down ; then
+			pre_down
+		fi
+		if [[ ! -z ${SSH_SERVER[0]} ]]; then
+			for i in $(seq 0 $((${#SSH_SERVER[@]} - 1))); do
+				local sp=("${SSH_SERVER[$i]}")
+				stop_ssh_tunnel $(get_server sp[@])
+			done
+		fi
+		if fn_exists down ; then
+			down 
+		fi
+	fi
+}
+readonly -f run_script 
+
+# load addon files (extension .addon)
+# params:
+#	NONE
+#
+# you can change ADDONS_DIR in your dispatcher script
+load_addons() {
+	[[  -e ${ADDONS_DIR} ]] || return 1
+	for file in ${ADDONS_DIR}/*.addon ; do
+		[[ -r "${file}" ]] && source "${file}"
+	done
+}
+readonly -f load_addons 
+
+# load addon files (extension .lang)
+# params:
+#	NONE
+#
+# you can change LANG_DIR in your dispatcher script
+load_langs() {
+	[[  -e ${LANGS_DIR} ]] || return 1
+
+	if [[ ! -z ${LOG_LANG} ]]; then
+		LOG_LANG=".${LOG_LANG}"
+	fi
+
+	for file in ${LANGS_DIR}/*${LOG_LANG}.lang ; do
+		[[ -r "${file}" ]] && source "${file}"
+	done
+}
+readonly -f load_langs
+
+# checks whether a function exists
+# params:
+#	function name
+#
+fn_exists() {
+	type $1 2>/dev/null | grep -q 'is a function'
+}
+readonly -f fn_exists 
+
+# call a (callback) function (only if it exists)
+# params:
+#	command [and arguments]
+#
+fn_callback() {
+	if fn_exists $1 ; then
+		$*
+	fi
+}
+readonly -f fn_callback
+
+# get IPv4 address of the passed device (eth0, eth1, wlan0, tun0 etc)
+get_if_ip() {
+	ifconfig $1 | grep 'inet addr:' | sed -re 's/^(.*inet addr:\s*)(.*)(\s*Bcast.*)$/\2/g'
+}
+
+# get IPv6 address of the passed device (eth0, eth1, wlan0, tun0 etc)
+get_if_ip6() {
+	ifconfig $1 | grep 'inet6 addr:' | sed -re 's/^(.*inet6 addr:\s*)(.*)(\s*Scope.*)$/\2/g'
+}
+
+# get a random element from a list
+# params:
+#	array (list) 
+#
+get_random() {
+	local a=("${!1}")
+
+	# fallback to string if array not passed
+	if [[ -z ${a} ]]; then
+		a=($*)
+	fi
+	echo -n ${a[$((RANDOM%${#a[*]}))]}
+}
+
+# get a (random) server (host) from a list
+# params:
+#	array with server hosts
+#
+# call custom function "server_name_post" if available (from addons)
+#	returned output will be a new server (host) 
+get_server() {
+	local servers=("${!1}")
+	local server=$( get_random servers[@] )
+
+	# split server from params: 1st param is server
+	local params=($server)
+	local server=${params[0]}
+	unset params[0]
+
+	local post_server=$( fn_callback callback_server_name_post $server )
+	if [[ ! -z ${post_server} ]]; then
+		echo -n ${post_server} ${params[@]}
+	else
+		echo -n ${server} ${params[@]}
+	fi
+}
+
+# get a connection NAME by using UUID
+# params:
+#	connection UUID 
+#
+get_nm_connection_id_by_uuid() {
+	echo -n $( nmcli -m multiline con list  | grep -B1 -P "^UUID:\s+$*$" | grep NAME | sed -re 's/NAME:\s*//g' )
+}
+
+# get a connection UUID by using NAME
+# params:
+#	connection NAME
+#
+get_nm_connection_uuid_by_id() {
+	echo -n $( nmcli -m multiline con list  | grep -A1 -P "^NAME:\s+$*$" | grep UUID | awk '{ print $2 }' )
+}
+
+# get a current connection NAME
+# params:
+#	NONE
+#
+get_current_nm_connection_id() {
+	echo -n $( get_nm_connection_id_by_uuid $CONNECTION_UUID )
+}
+
+# get connection UUID (find UUID if NAME passed or just returned UUID)
+# params:
+#	connection NAME or UUID
+#
+connection_uuid() {
+	local id="$*"
+	if ! [[ ${#id} =~ ^........-....-....-....-............$ ]]; then
+		id=$( get_nm_connection_uuid_by_id $id )
+	fi
+	echo -n $id
+}
+
+# am I connected to an NAME/UUID
+# params:
+#	connection NAME or UUID
+#
+connected_to_uuid() {
+	local uuid=$( connection_uuid $* )
+	nmcli con status | grep -Eq " $uuid "
+}
+
+# start NM conenction (pass UUID or NAME)
+# params:
+#	connection NAME or UUID
+#
+# after connection is started: call custom function "nm_connection_started $UUID" if available (from addons)
+start_nm_connection() {
+	local id=$( connection_uuid $* )
+	local NMCLI_ANSWER=$( { nmcli con up uuid "$id"; } 2>&1 )
+	fn_callback callback_nm_connection_started ${id}
+	return $?
+}
+
+# stop NM conenction (pass UUID or NAME)
+# params:
+#	connection NAME or UUID
+#
+# after connection is stopped: call custom function "nm_connection_stopped $UUID" if available (from addons)
+stop_nm_connection() {
+	local id=$( connection_uuid $* )
+	local NMCLI_ANSWER=$( { nmcli con down uuid "$id"; } 2>&1 )
+	fn_callback callback_nm_connection_stopped ${id}
+	return $?
+}
+
+# start SSH tunnel. wait for 10 secondsn if the connection breaks and restart connection if DEV still exists
+# params:
+#	ssh connection params like; "-D 9999 -l USERNAME"	
+#
+# before connection is established: call custom function "ssh_tunnel_pre $server" if available (from addons)
+#	returned output will be evaled (i.e. MY_VAR=123)
+# if/after connection breaks: call custom function "ssh_tunnel_post $server" if available (from addons)
+start_ssh_tunnel() {
+	local servers=("${!1}")
+
+	while ifconfig ${DEV} >/dev/null 2>&1; do
+		local server=$( get_server servers[@] )
+
+		local sp=($server)
+		printf -v msg "${LANG_STARTING_SSH_TUNNEL}" "${sp[0]}"
+		log ${msg}
+
+		local ssh_tunnel_pre_params=$( fn_callback callback_ssh_tunnel_pre_vars ${server} )
+		stop_ssh_tunnel "ssh -N $server"
+		local x=$( { eval ${ssh_tunnel_pre_params} ssh -N $server; } 2>&1 )
+
+		printf -v msg "${LANG_STOPPED_SSH_TUNNEL} ${sp[0]}" "$x"
+		log ${msg}
+
+		sleep 10 
+	done
+}
+
+# stop SSH tunnel
+# params:
+#	search pattern, usually somethng like this "ssh -N server ... params..."
+#	if nothing was found, 1st param (usually server) will be removed and tried again
+#
+stop_ssh_tunnel() {
+	local ssh_tunnel=$(grep_pattern $*)
+
+	# if nothing matched remove 1st param and try it again
+	if ! pgrep -f "${ssh_tunnel}" >/dev/null; then
+		# remove "ssh -N" before removing first parameter
+		if [[ ${ssh_tunnel} =~ "^ssh -N " ]]; then
+			ssh_tunnel=${ssh_tunnel#ssh -N }
+		fi
+
+		local ssh_tunnel_params=($ssh_tunnel)
+		if [[ ${#ssh_tunnel_params[@]} -gt 1 ]]; then
+			unset ssh_tunnel_params[0]
+		fi
+
+		ssh_tunnel=$(grep_pattern ${ssh_tunnel_params[@]})
+		if ! pgrep -f "${ssh_tunnel}" >/dev/null; then
+			return 1
+		fi
+	fi
+
+	printf -v msg "${LANG_STOPPING_SSH_TUNNELS}" "${ssh_tunnel}"
+	log ${msg}
+
+	for g in $(ps -o "%r" -p $(pgrep -f "${ssh_tunnel}") | grep -v PGID) ; do
+		kill -TERM -$g 2>/dev/null
+	done
+	return 0
+}
+
+# backslack before hyphen because of (p)grep
+# params:
+#	string
+#
+grep_pattern() {
+	local pattern=$*
+	echo -n ${pattern//-/\\-}
+}
+
+if ! [[ $2 =~ ^(up|down|vpn-up|vpn-down)$ ]] || [[ -z ${CONNECTION_UUID} ]]; then
+	exit
+fi
+
+# name of your device (eth0, wlan0, tun0 etc) 
+readonly DEV=$1
+
+# called action; up, down, vpn-up, vpn-down 
+readonly ACT=$2
+
+# CONNECTION_UUID = UUID of the connection
+# CONNECTION_NAME = NAME of the connection
+readonly CONNECTION_NAME=$( get_current_nm_connection_id )
+
+
+# default dir with addons: dir where this script is located
+# you can overwrite it in your dispatcher script
+# all files with extension ".addon" will be included
+ADDONS_DIR="$(get_script_dir)/addons"
+
+# default dir with language file(s): dir where this script is located
+# you can overwrite it in your dispatcher script
+# all files with extension ".lang" will be included
+LANGS_DIR=$(get_script_dir)
+
+# default dir with script file(s): dir where this script is located + /scripts
+# you can overwrite it in the config file /etc/NetworkManager/dispatcher.d/nm_helper.config 
+# all files with extension ".lang" will be included
+SCRIPTS_DIR="$(get_script_dir)/scripts"
+
+# default CONFIG_DIR: dir where this script is located
+# default config file: nm_helpers.config in CONFIG_DIR (usually /etc/NetworkManager/dispatcher.d/nm_helpers.config)
+# second config file: .nm_helpers in HOME (usually /root/.nm_helpers)
+readonly CONFIG_DIR=$(get_script_dir)
+[[ -r "${CONFIG_DIR}" && -r "${CONFIG_DIR}/nm_helpers.config" ]] && source "${CONFIG_DIR}/nm_helpers.config"
+[[ -r "${HOME}" && -r "${HOME}/.nm_helpers" ]] && source "${CONFIG_DIR}/.nm_helpers"
+
+
+# except only two letter languages
+if ! [[ ${LOG_LANG} =~ ^[a-z][a-z]$ ]]; then
+	unset -v LOG_LANG
+fi
+
+# load addons, language files and run scripts
+load_addons 
+load_langs
+load_scripts
+

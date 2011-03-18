@@ -1,0 +1,30 @@
+#!/bin/bash
+
+#########################################################
+#
+# This is a test script.
+#
+# This an example for using regular expressions (POSIX)
+# to match connection names. Just put ~ before the your
+# regular expression string. 
+#
+#
+# When NetworkManager establishes connection with any
+# access point with "Office" in name  a VPN connection 
+# with DO_CONNECTION ("Office VPN") should be started.
+#
+# You could use "~guest" to match any access point with
+# the word "guest" in the name.
+#
+#
+# DO_CONNECTION can have more than one defined connection. 
+# In that case a random connection will be chosen:
+#
+# example for multiple connections:
+# DO_CONNECTION=("Office VPN" "Office VPN2" "Office VPN3")
+#
+
+
+IF_CONNECTION=("~Office" "HOME")
+DO_CONNECTION=("Office VPN")
+

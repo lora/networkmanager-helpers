@@ -1,0 +1,36 @@
+#!/bin/bash
+
+#########################################################
+#
+# This is a test script.
+#
+# When NetworkManager establishes connection with
+# IF_CONNECTION ("Office VPN") this script will 
+# start ssh tunnel with one of the hosts in SSH_TUNNEL.
+#
+#
+# SSH_TUNNEL can have more than one defined connection. 
+# In that case a random connection will be chosen:
+#
+# example for multiple connections:
+# SSH_TUNNEL=("server1.com" "server2.com" "server3.com")
+#
+# 
+# In the exmaple below ssh tunnels for sending emails 
+# will be created i.e.  if your network has closed
+# SMTP port(s).
+#
+
+IF_CONNECTION=("Office VPN")
+
+ssh_params="-L 50993:my.email.server.com:993 -L 50465:my.email.server.com:465"
+SSH_TUNNEL=("server1.com $ssh_params" "server2.com $ssh_params")
+
+up() {
+
+}
+
+down() {
+	# maybe something like this if you use gnome?
+	#su - USERNAME -c 'notify-send "Office-VPN" "You got disconnected"'
+}

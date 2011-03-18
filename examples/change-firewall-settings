@@ -1,0 +1,30 @@
+#!/bin/bash
+
+#########################################################
+#
+# This is a test script.
+#
+# When NetworkManager establishes connection with
+# IF_CONNECTION ("My Access Point") this script will 
+# run the function "up()"
+#
+# When connection with IF_CONNECTION is lost "down()"
+# will be run
+#
+# IF_CONNECTION can have more than one defined connection. 
+#
+
+IF_CONNECTION=("Office VPN1" "Office VPN2")
+
+
+# if connected: change firewall and open some ports 
+up() {
+	iptables -A DYN_INPUT  -p tcp -s 192.168.1.0/16 --dport 80 -j ACCEPT
+	iptables -A DYN_INPUT  -p tcp -s 192.168.1.0/16 --dport 443 -j ACCEPT
+}
+
+# if disconnected: flush the table
+down() {
+	iptables -F DYN_INPUT
+	iptables -F DYN_OUTPUT
+}

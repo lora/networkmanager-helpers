@@ -1,0 +1,44 @@
+####################################################
+#
+# Messages in your language: EN
+#
+# Hint: you can use notify-send or osd_cat to 
+#       display messages
+#
+# %s is being replaced with passed values:
+# server name, connection name, error etc
+#
+####################################################
+
+# ssh tunnel is being started.
+# params: 
+# - ssh server 
+LANG_STARTING_SSH_TUNNEL="SSH tunnel started: %s"
+
+# ssh tunnel/connection died
+# params:
+# - ssh server
+# - error message
+LANG_STOPPED_SSH_TUNNEL="SSH tunnel with %s disconnected: %s"
+
+
+# ssh tunnel(s) are being closed
+# params: 
+# - matched server
+LANG_STOPPING_SSH_TUNNELS="SSH tunnels are disconnecting..."
+
+
+# network manager connection is established:
+# wireless, wired, VPN ...
+# params:
+# - connection name (like "VPN Office")
+LANG_CONNECTED_TO="Connected with %s"
+
+
+# network manager connection is broken
+# params:
+# - connection name (like "VPN Office")
+# - error (if available)
+LANG_DISCONNECTED_FROM="Disconnected from %s"
+
+

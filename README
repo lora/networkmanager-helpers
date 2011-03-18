@@ -1,0 +1,205 @@
+networkmanager-helpers
+
+
+networkmanager-helpers is a script (or set of scripts) which helps you
+automate NetworkManager actions.
+
+Examples for these actions:
+
+1. Connect to "Office VPN" after you connect to "Home Access Point" 
+2. Change firewall settings after connecting to "Office VPN"
+3. Start SSH tunnel with example.com wenn connnected to "Hotel Guests" or "Test Access Point"
+
+
+How is this working:
+--------------------
+Main file is "nm_helpers" which should be placed /etc/NetworkManager/dispatcher.d/.
+Be sure to make it executable: chmod +x nm_helpers. You should copy other files in the same 
+folder just to make it simple.
+
+nm_helpers catches NM events and acts according to you configuration scripts. 
+nm_helpers expects by default your scrips to be in "scripts" subfolder but your can change that
+in nm_helpers.config. Your configration scripts will be used only if they are executable (chmod +x).
+
+
+IMPORTANT:
+nm_helper DEPENDS ON CONFIGURATION SCRIPT IN YOUR SCRIPTS folder.
+There are a few example configuration scripts in examples folder.
+Nothing happens without your configuration scripts.
+
+
+
+
+Basic examples and HowTo:
+-------------------------
+1. Your configuration scripts might look like this:
+---
+IF_CONNECTION=("Home Access Point")
+DO_CONNECTION=("Office VPN")
+---
+
+That's it. Two lines are enough. You will be connected to "Office VPN" after you connect to 
+"Home Access Point".  These names "Office VPN" or "Home Access Point" are predefined connections 
+names from your NM configuration.
+
+That means: if connected to IF_CONNECTION nm_helpers will connect you to DO_CONNECTION
+
+
+You can define connections also with UUIDs instead of using connection's name.
+---
+IF_CONNECTION=("4d2c8947-4093-4fef-a929-bc8d92b77bc7")
+DO_CONNECTION=("Office VPN")
+---
+That is usefull if you have connections with the same name.
+
+
+
+2. IF_CONNECTION and DO_CONNECTION can also contain multiple values:
+---
+IF_CONNECTION=("Home Access Point" "Office Access Point")
+DO_CONNECTION=("Office VPN1" "Office VPN2")
+---
+
+That means: if any connection from IF_CONNNECTION is established a RANDOM connection from 
+DO_CONNECTION will be started.
+
+
+
+
+3. You can also use regular expressions in matching names. Just put ~ before the name:
+---
+IF_CONNECTION=("~^Home" "~Office")
+---
+
+will match any connection name which begins with "Home" or contains the word "Office" in 
+its name.
+
+
+
+
+4. Starting SSH tunnel connections is working just like example from above:
+
+---
+IF_CONNECTION=("Home Access Point")
+SSH_SERVER=("my.server.com")
+---
+
+You can also have multiple ssh servers configured just like for DO_CONNECTION:
+---
+IF_CONNECTION=("Home Access Point")
+SSH_SERVER=("my.server.com" "my.2nd.server.com" "my.3rd.server.com")
+---
+
+A ssh tunnel with a random server will be started. You can make SSH_SERVER even more
+"complicated" and pass other configuration settings there:
+
+SSH_SERVER=("my.server.com -l USERNAME -p 22222" "my.2nd.server.com -p 33333")
+
+
+
+
+5. nm_helper can also run commands before or after you (dis)connect:
+---
+IF_CONNECTION=("Home Access Point")
+
+up() {
+	rsync -avz /home user@server:/backup/home
+}
+---
+
+This will start rsync backup of your /home folder when you connect to "Home Access Point".
+
+Other available functions are: down() and pre_up() 
+
+pre_up() and pre_down() run just before running DO_CONNECTION, SSH_SERVER etc
+up() and down() run after everything at the end. 
+
+
+The order of running nm_helper commands is:
+1. pre_up() or pre_down()
+2. DO_CONNECTION
+3. SSH_SERVER
+4. up() or down()
+
+
+And you may use all of the above commands in one file if you want. They might
+sometime collide (ssh tunnel breaks because vpn changes routes) so be carefull.
+SSH_SERVER waits until DO_CONNECTION is started.
+---
+IF_CONNECTION=("Home Access Point")
+DO_CONNECTION=("Office VPN1" "Office VPN2")
+SSH_SERVER=("my.server.com" "my.2nd.server.com" "my.3rd.server.com")
+---
+This will start a connection with "Office VPN1" or "Office VPN2" and after that
+start the SSH connections with one of the servers from the list. 
+
+
+
+
+6. If you want to run a command every time you connect to anything put only your "up()"
+command in a file:
+
+---
+up() {
+	notify-send "You are connected"
+}
+---
+
+
+
+
+7. You can also run actions if you matched an ethernet (or vpn) device:
+---
+IF_DEVICE=("eth0")
+DO_CONNECTION=("My Secure VPN")
+---
+
+This connects you to "My Secure VPN" if a connection is established over eth0 device.
+
+
+You can also use regular expressions. Just begin with "~":
+---
+IF_DEVICE=("~^hso")
+DO_CONNECTION=("My Secure VPN")
+---
+
+This connects you to "My Secure VPN" if a connection is established over device which
+name begins with "hso".
+
+
+
+
+List of all available variables and commands:
+---------------------------------------------
+
+Matching:
+- IF_CONNECTION=()
+   -> match connection name
+   -> example: IF_CONNECTION=("Home")
+
+- IF_DEVICE=()
+   -> match connection device
+   -> example: IF_DEVICE=("eth1", "~tun")
+
+
+Actions:
+- DO_CONNECTION=()
+   -> connect to this (or one of these) connection name
+   -> example: DO_CONNECTION=("VPN1 Office" "VPN Office2")
+
+- SSH_SERVER=()
+   -> start a ssh tunnel with this host (incl. params)
+   -> example: SSH_SERVER=("my.server.com" "my.2nd.server.com -l root -p 33333")
+
+Commands:
+- up(), down(), pre_up(), pre_down()
+   -> pre_up() and pre_down() run just before running DO_CONNECTION, SSH_SERVER etc
+   -> up() and down() run after everything at the end
+
+
+
+
+
+
+
+

@@ -1,0 +1,30 @@
+Please read README in the main folder and check subfolder "examples" for some example scripts.
+
+
+List of all available variables and commands:
+---------------------------------------------
+
+Matching:
+- IF_CONNECTION=()
+   -> match connection name
+   -> example: IF_CONNECTION=("Home")
+
+- IF_DEVICE=()
+   -> match connection device
+   -> example: IF_DEVICE=("eth1", "~tun")
+
+
+Actions:
+- DO_CONNECTION=()
+   -> connect to this (or one of these) connection name
+   -> example: DO_CONNECTION=("VPN1 Office" "VPN Office2")
+
+- SSH_SERVER=()
+   -> start a ssh tunnel with this host (incl. params)
+   -> example: SSH_SERVER=("my.server.com" "my.2nd.server.com -l root -p 33333")
+
+Commands:
+- up(), down(), pre_up(), pre_down()
+   -> pre_up() and pre_down() run just before running DO_CONNECTION, SSH_SERVER etc
+   -> up() and down() run after everything at the end
+

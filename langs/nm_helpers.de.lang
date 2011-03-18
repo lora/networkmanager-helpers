@@ -1,0 +1,45 @@
+####################################################
+#
+# Meldungen in deiner Sprache: DE 
+#
+# Idee: notify-send oder osd_cat verwenden um 
+#       Meldungen einzublenden 
+#
+# %s wird mit uebergebenen Werten ersetzt: 
+# server name, connection name, error etc
+#
+####################################################
+
+# ssh tunnel wird gestartet 
+# params:
+# - ssh server 
+LANG_STARTING_SSH_TUNNEL="SSH-Tunnel mit %s wird gestartet"
+
+# ssh tunnel/verbindung wurde unterbrochen:
+# params:
+# - ssh server
+# - fehlermeldung
+LANG_STOPPED_SSH_TUNNEL="SSH-Tunnel mit %s wurde gestoppt: %s"
+
+
+# ssh tunnel(s) werden geschlossen 
+# params: 
+# - server
+LANG_STOPPING_SSH_TUNNELS="SSH-Tunnels werden gestoppt"
+
+
+# network manager verbindung wurde erstellt: 
+# wireless, wired, VPN ...
+# params:
+# - verbindungsname (wie "VPN Office")
+LANG_CONNECTED_TO="Verbunden mit %s"
+
+
+# network manager verbindung wurde unterbrochen 
+# passed params:
+# - verbindungsname (wie "VPN Office")
+# - fehlermeldung (wenn vorhanden) 
+LANG_DISCONNECTED_FROM="Verbindung mit %s unterbrochen"
+
+
+

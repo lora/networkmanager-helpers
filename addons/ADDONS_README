@@ -1,0 +1,73 @@
+
+networkmanager-helper supports addons and offers a few callback functions 
+which can be written and used by you.
+
+
+Addons are bash scripts and their functions are available in all configurations
+scripts. These files are by default in addons/ subfolder and have extension .addon.
+
+You can also define custom callback functions in your addon file(s).
+
+nm-helpers support three callback functions:
+1. callback_log
+2. callback_server_name_post
+3- callback_ssh_tunnel_pre_vars 
+
+
+1. callback_log()
+This function replaces built in log function. I use it to display connection 
+messages as OSD or just to save it in a custom log file:
+
+Example for your callback_log function:
+
+callback_log() {
+	echo $* >/var/log/nm_helper.log
+}
+
+
+
+2. callback_server_name_post()
+
+This is a pretty handy callback function which is called right before a ssh tunnel
+is started. server from SSH_SERVER is passed to this function. This function 
+can return an another server host and it will replace the current server.
+
+I have four different SSH servers with same domain:
+first.myserver.com
+second.myserver.com
+third.myserver.com
+forth.mysserver
+
+I define in my configuration scripts only subdomains (to make the files easier to read)
+and let the function below change the server name:
+
+callback_server_name_post() {
+	local server=$*
+
+	if ! [[ ${server} =~ ^(first|server|third|fourth)$ ]] ; then
+		server="${server}.myserver.com"
+	fi
+	echo -n ${server}
+}
+
+
+
+3. callback_ssh_tunnel_pre_vars()
+
+There are a few ssh servers where I have only username/password but I am not able to
+save my ssh keys on the server. It is practicaly impossible to connect to these servers
+because it is waiting for your to type in your password. I started using a tool called
+"sshpass" which can do the job. It is not maybe the best way but it works for me.
+Contact me if you have better ideas.
+
+This is how I use it:
+
+callback_ssh_tunnel_pre_vars() {
+	local server=$1
+	if [[ ${server} =~ .myserver.com$ ]] ; then
+		echo -n "SSHPASS=`cat /root/.ssh/myserver.pass` sshpass -e"
+	fi
+}
+
+
+

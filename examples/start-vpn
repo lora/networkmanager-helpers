@@ -1,0 +1,22 @@
+#!/bin/bash
+
+#########################################################
+#
+# This is a test script.
+#
+# When NetworkManager establishes connection with 
+# IF_CONNECTION ("My Access Point") this script will 
+# start VPN connection with DO_CONNECTION ("Office VPN")
+#
+#
+# DO_CONNECTION can have more than one defined connection. 
+# In that case a random connection will be chosen:
+#
+# example for multiple connections:
+# DO_CONNECTION=("Office VPN" "Office VPN2" "Office VPN3")
+#
+
+
+IF_CONNECTION=("My Access Point")
+DO_CONNECTION=("Office VPN")
+
