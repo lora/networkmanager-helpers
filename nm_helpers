@@ -120,7 +120,7 @@ run_script() {
 		if [[ ! -z ${SSH_SERVER[0]} ]]; then
 			for i in $(seq 0 $((${#SSH_SERVER[@]} - 1))); do
 				local sp=("${SSH_SERVER[$i]}")
-				stop_ssh_tunnel $(get_server sp[@])
+				stop_ssh_tunnel $(get_server sp[@]) &
 			done
 		fi
 		if fn_exists down ; then
@@ -193,7 +193,7 @@ get_if_ip6() {
 
 # get a random element from a list
 # params:
-#	array (list) 
+#	array (or param list which will be converted to array)
 #
 get_random() {
 	local a=("${!1}")
@@ -204,6 +204,7 @@ get_random() {
 	fi
 	echo -n ${a[$((RANDOM%${#a[*]}))]}
 }
+readonly -f get_random
 
 # get a (random) server (host) from a list
 # params:
@@ -227,6 +228,7 @@ get_server() {
 		echo -n ${server} ${params[@]}
 	fi
 }
+readonly -f get_server
 
 # get a connection NAME by using UUID
 # params:
@@ -383,19 +385,15 @@ readonly ACT=$2
 # CONNECTION_NAME = NAME of the connection
 readonly CONNECTION_NAME=$( get_current_nm_connection_id )
 
-
 # default dir with addons: dir where this script is located
-# you can overwrite it in your dispatcher script
 # all files with extension ".addon" will be included
 ADDONS_DIR="$(get_script_dir)/addons"
 
 # default dir with language file(s): dir where this script is located
-# you can overwrite it in your dispatcher script
 # all files with extension ".lang" will be included
 LANGS_DIR=$(get_script_dir)
 
 # default dir with script file(s): dir where this script is located + /scripts
-# you can overwrite it in the config file /etc/NetworkManager/dispatcher.d/nm_helper.config 
 # all files with extension ".lang" will be included
 SCRIPTS_DIR="$(get_script_dir)/scripts"
 
