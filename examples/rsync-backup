@@ -11,7 +11,7 @@
 #
 
 
-# You can connections UUIDs to be sure that you are really
+# You can use connections UUIDs to be sure that you are really
 # connected to your access point.
 #IF_CONNECTION=("4d2c8947-4093-4fef-a929-bc8d92b77bc7")
 
