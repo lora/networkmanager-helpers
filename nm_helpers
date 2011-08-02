@@ -54,9 +54,9 @@ load_scripts() {
 		if [[ $script_run -eq 0 ]] && [[ ! -z ${IF_CONNECTION[0]} ]]; then
 			for i in $(seq 0 $((${#IF_CONNECTION[@]} - 1))); do
 				local if_conn=${IF_CONNECTION[$i]}
-			
+
 				if [[ ${if_conn:0:1} == '~' && ${CONNECTION_NAME} =~ ${if_conn#~*} ]] || 
-					[[ ${if_conn:0:1} != '~' && ${CONNECTION_UUID} == $(connection_uuid ${if_conn}) ]] ; then
+					[[ ${if_conn:0:1} != '~' && $(connection_uuid_in_if_connection ${if_conn} ; echo $?) -eq 0 ]] ; then
 					run_script &
 					script_run=1
 					break
@@ -84,6 +84,26 @@ load_scripts() {
 	done
 }
 readonly -f load_scripts 
+
+# are we connected to passed IF_CONNECTION?
+# (made to handle multiple connections with the same name)
+# params:
+#	one IF_CONNECTION element
+#
+connection_uuid_in_if_connection() {
+	local id="$*"
+	if ! is_uuid $id; then
+		for conn_uuid in $( get_nm_connection_uuid_by_id $id ); do
+			if [[ ${conn_uuid} == ${CONNECTION_UUID} ]]; then
+				return 0
+			fi
+		done
+		return 1
+	fi
+	[[ ${id} == ${CONNECTION_UUID} ]]
+}
+readonly -f connection_uuid_in_if_connection
+
 
 # run included script if at least one condition is met
 # params:
@@ -235,7 +255,7 @@ readonly -f get_server
 #	connection UUID 
 #
 get_nm_connection_id_by_uuid() {
-	echo -n $( nmcli -m multiline con list  | grep -B1 -P "^UUID:\s+$*$" | grep NAME | sed -re 's/NAME:\s*//g' )
+	nmcli -m multiline con list  | grep -B1 -P "^UUID:\s+$*$" | grep NAME | sed -re 's/NAME:\s*//g'
 }
 
 # get a connection UUID by using NAME
@@ -243,7 +263,7 @@ get_nm_connection_id_by_uuid() {
 #	connection NAME
 #
 get_nm_connection_uuid_by_id() {
-	echo -n $( nmcli -m multiline con list  | grep -A1 -P "^NAME:\s+$*$" | grep UUID | awk '{ print $2 }' )
+	nmcli -m multiline con list  | grep -A1 -P "^NAME:\s+$*$" | grep UUID | awk '{ print $2 }'
 }
 
 # get a current connection NAME
@@ -254,13 +274,21 @@ get_current_nm_connection_id() {
 	echo -n $( get_nm_connection_id_by_uuid $CONNECTION_UUID )
 }
 
+
+# is the passed string UUID or NAME
+# params:
+#	connection NAME or UUID
+is_uuid() {
+	[[ $* =~ ^........-....-....-....-............$ ]]
+}
+
 # get connection UUID (find UUID if NAME passed or just returned UUID)
 # params:
 #	connection NAME or UUID
 #
 connection_uuid() {
 	local id="$*"
-	if ! [[ ${#id} =~ ^........-....-....-....-............$ ]]; then
+	if ! is_uuid $id; then
 		id=$( get_nm_connection_uuid_by_id $id )
 	fi
 	echo -n $id
@@ -283,8 +311,9 @@ connected_to_uuid() {
 start_nm_connection() {
 	local id=$( connection_uuid $* )
 	local NMCLI_ANSWER=$( { nmcli con up uuid "$id"; } 2>&1 )
+	local a=$?
 	fn_callback callback_nm_connection_started ${id}
-	return $?
+	return $a
 }
 
 # stop NM conenction (pass UUID or NAME)
@@ -295,8 +324,9 @@ start_nm_connection() {
 stop_nm_connection() {
 	local id=$( connection_uuid $* )
 	local NMCLI_ANSWER=$( { nmcli con down uuid "$id"; } 2>&1 )
+	local a=$?
 	fn_callback callback_nm_connection_stopped ${id}
-	return $?
+	return $a
 }
 
 # start SSH tunnel. wait for 10 secondsn if the connection breaks and restart connection if DEV still exists
@@ -319,6 +349,8 @@ start_ssh_tunnel() {
 		local ssh_tunnel_pre_params=$( fn_callback callback_ssh_tunnel_pre_vars ${server} )
 		stop_ssh_tunnel "ssh -N $server"
 		local x=$( { eval ${ssh_tunnel_pre_params} ssh -N $server; } 2>&1 )
+
+		echo ${ssh_tunnel_pre_params} ssh -N $server >> /tmp/nm_stssh
 
 		printf -v msg "${LANG_STOPPED_SSH_TUNNEL} ${sp[0]}" "$x"
 		log ${msg}
@@ -362,7 +394,7 @@ stop_ssh_tunnel() {
 	return 0
 }
 
-# backslack before hyphen because of (p)grep
+# backslash before hyphen because of (p)grep
 # params:
 #	string
 #
@@ -374,6 +406,7 @@ grep_pattern() {
 if ! [[ $2 =~ ^(up|down|vpn-up|vpn-down)$ ]] || [[ -z ${CONNECTION_UUID} ]]; then
 	exit
 fi
+
 
 # name of your device (eth0, wlan0, tun0 etc) 
 readonly DEV=$1
